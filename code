@@ -1,0 +1,159 @@
+#include <Adafruit_MQTT.h>
+#include <Adafruit_MQTT_Client.h>
+#include <ESP8266WiFi.h>
+#include <DHTesp.h>
+#define S1 4
+#define S0 1
+#define analogpin A0
+#define DHTpin 14    //D5 of NodeMCU is GPIO14 
+DHTesp dht;
+#define WLAN_SSID       "**************"
+#define WLAN_PASS       "*****************"
+
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883                   // use 8883 for SSL
+#define AIO_USERNAME    "**************"
+#define AIO_KEY         "*********************"
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+Adafruit_MQTT_Publish temperature = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature");
+Adafruit_MQTT_Publish humidity = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity");
+Adafruit_MQTT_Publish sensor_1 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/gas1");
+Adafruit_MQTT_Publish sensor_2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/rain1");
+Adafruit_MQTT_Publish sensor_3 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/soili");
+Adafruit_MQTT_Publish sensor_4 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/raini");
+
+void MQTT_connect();
+
+void setup()
+{pinMode(analogpin, INPUT);
+  pinMode(S0,OUTPUT);
+  pinMode(S1,OUTPUT);  
+
+  Serial.begin(115200);
+  delay(10);
+  Serial.println();
+  Serial.println("Status\tHumidity (%)\tTemperature (C)\t(F)\tHeatIndex (C)\t(F)");
+  
+  // Autodetect is not working reliable, don't use the following line
+  // dht.setup(17);
+ 
+  // use this instead: 
+  dht.setup(DHTpin, DHTesp::DHT11); //for DHT11 Connect DHT sensor to GPIO 17
+  //dht.setup(DHTpin, DHTesp::DHT22); //for DHT22 Connect DHT sensor to GPIO 17
+ Serial.println(F("Adafruit MQTT demo"));
+
+  // Connect to WiFi access point.
+  Serial.println(); Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(WLAN_SSID);
+
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  Serial.println("WiFi connected");
+  Serial.println("IP address: "); Serial.println(WiFi.localIP());
+
+  // Setup MQTT subscription for onoff feed.
+  //mqtt.subscribe(&onoffbutton);
+}
+
+uint32_t x=0;
+void loop()
+{ 
+
+    MQTT_connect();
+
+  delay(dht.getMinimumSamplingPeriod());
+ 
+  float humidity1 = dht.getHumidity();
+  float temperature1 = dht.getTemperature();
+  Serial.println(humidity1);
+    Serial.println(temperature1);
+
+  temperature.publish(temperature1);
+humidity.publish(humidity1);
+delay(3000);
+Serial.print(F("\nSending Sensor's Value "));
+  digitalWrite(S0,HIGH);
+  digitalWrite(S1,LOW);
+  Serial.print("Sensor 1 ");Serial.println(analogRead(analogpin));
+  Serial.print("...");
+ int Value1=analogRead(analogpin);
+  Value1=map(Value1,0,1023,255,0);
+
+
+  if (! sensor_1.publish(Value1)) {
+    Serial.println(F("Failed"));
+  } else {
+    Serial.println(F("OK!"));
+  }
+  delay(3000);
+  digitalWrite(S0,LOW);
+  digitalWrite(S1,HIGH);
+  Serial.print("Sensor 2 ");Serial.println(analogRead(analogpin));
+  Serial.print("...");
+ int Value2=analogRead(analogpin);
+   Value2=map(Value2,0,1023,0,100);
+
+  if (! sensor_2.publish(Value2)) {
+    Serial.println(F("Failed"));
+  } else {
+    Serial.println(F("OK!"));
+  }
+  delay(3000);
+  digitalWrite(S0,HIGH);
+  digitalWrite(S1,HIGH);
+  Serial.print("Sensor 3 ");Serial.println(analogRead(analogpin));
+  Serial.print("...");
+  int Value3=analogRead(analogpin);
+  Value3=map(Value3,0,1023,300,0)*0.5;
+
+  if (! sensor_3.publish(Value3)) {
+    Serial.println(F("Failed"));
+  } else {
+    Serial.println(F("OK!"));
+  }
+  delay(3000);
+digitalWrite(S0,LOW);
+  digitalWrite(S1,LOW);
+  Serial.print("Sensor 4 ");Serial.println(analogRead(analogpin));
+  Serial.print("...");
+  int Value4=analogRead(analogpin);
+  Value4=map(Value4,0,1023,255,0);
+  if (! sensor_4.publish(Value4)) {
+    Serial.println(F("Failed"));
+  } else {
+    Serial.println(F("OK!"));
+  }
+  delay(2000);
+}
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print("Connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.println(mqtt.connectErrorString(ret));
+       Serial.println("Retrying MQTT connection in 5 seconds...");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds
+       retries--;
+       if (retries == 0) {
+         // basically die and wait for WDT to reset me
+         while (1);
+       }
+  }
+  Serial.println("MQTT Connected!");
+}
+  
